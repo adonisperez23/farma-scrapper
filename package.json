@@ -1,0 +1,36 @@
+{
+  "name": "farma-scrapper",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx --env-file=.env src/index.ts",
+    "daily": "tsx --env-file=.env src/index.ts",
+    "scheduler": "tsx --env-file=.env src/main.ts",
+    "test:scrapers": "tsx --env-file=.env src/test-scrapers.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.14.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "dependencies": {
+    "axios": "^1.19.0",
+    "cheerio": "^1.2.0",
+    "node-cron": "^4.6.0",
+    "@supabase/supabase-js": "^2.39.0"
+  },
+  "devDependencies": {
+    "@types/cheerio": "^1.0.0",
+    "@types/node": "^26.2.0",
+    "@types/node-cron": "^3.0.11",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2"
+  }
+}
