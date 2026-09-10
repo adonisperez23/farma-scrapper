@@ -19,7 +19,7 @@ export interface ComparacionMedicamento {
   medicamento_base_id: string;
   patologia: string;
   principio_activo: string;
-  dosis: string;
+  dosis: string[];
   filas: FilaComparacion[];
 }
 
@@ -79,7 +79,7 @@ export function construirComparacion(registros: RegistroPreparadoDB[]): Comparac
 export function imprimirComparacion(comparaciones: ComparacionMedicamento[], tasaUsd: number | null): void {
   for (const comp of comparaciones) {
     console.log(`\n${'='.repeat(96)}`);
-    console.log(`💊 ${comp.principio_activo} ${comp.dosis} (${comp.medicamento_base_id}) — ${comp.patologia}`);
+    console.log(`💊 ${comp.principio_activo} ${comp.dosis.join(', ')} (${comp.medicamento_base_id}) — ${comp.patologia}`);
     console.log(`${'='.repeat(96)}`);
     console.log(
       `${'Farmacia'.padEnd(11)} ${'Laboratorio'.padEnd(12)} ${'Presentación'.padEnd(13)} ${'Precio caja'.padStart(11)} ${'Bs/unidad'.padStart(10)} ${'Bs x30 (equiv)'.padStart(13)}  Disp.`

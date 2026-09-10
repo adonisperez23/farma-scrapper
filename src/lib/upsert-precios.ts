@@ -33,13 +33,12 @@ export async function upsertPreciosFarmacia(registros: RegistroPreparadoDB[]): P
     farmacia: r.farmacia,
     nombre_producto_farmacia: r.nombre_producto_farmacia,
     principio_activo: r.principio_activo,
-    dosis: r.dosis,
+    dosis: r.dosis.join(' / '),
     laboratorio: r.laboratorio,
     es_combo: r.es_combo,
     presentacion: r.presentacion,
     cantidad_unidades: r.cantidad_unidades,
     forma_farmaceutica: r.forma_farmaceutica,
-    clave_comparacion: r.clave_comparacion,
     precio_original: r.precio_original,
     moneda: r.moneda,
     precio_bs: r.precio,
@@ -49,7 +48,6 @@ export async function upsertPreciosFarmacia(registros: RegistroPreparadoDB[]): P
     url_producto: r.url_producto,
     score_similitud: r.score_similitud,
     tasa_bcv_usd: r.tasa_bcv_usd,
-    fuente_tasa: r.fuente_tasa,
     fecha_actualizacion: r.fecha_actualizacion,
     tiene_componentes_mixtos: r.tiene_componentes_mixtos
   }));

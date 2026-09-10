@@ -51,22 +51,8 @@ function principiosCoinciden(prodPrincipios: string[], basePrincipio: string): b
   });
 }
 
-function numeroDosis(d: string): number {
-  return parseFloat(d.split('/')[0].replace(/[^0-9.,]/g, '').replace(',', '.'));
-}
-
-function dosisCoinciden(prodDosis: string[], baseDosis: string): boolean {
-  const numBase = numeroDosis(baseDosis);
-  if (Number.isNaN(numBase)) return false;
-
-  return prodDosis.some((d) => {
-    const num = numeroDosis(d);
-    return !Number.isNaN(num) && Math.abs(num - numBase) < 1e-6;
-  });
-}
-
 function puntajeNombre(nombre: string, base: MedicamentoBase): number {
-  const objetivo = normalizarTexto(`${base.principioActivo} ${base.dosis}`);
+  const objetivo = normalizarTexto(`${base.principioActivo} ${base.dosis.join(' ')}`);
   const limpio = normalizarTexto(nombre);
   return parseFloat(diceCoefficient(limpio, objetivo).toFixed(2));
 }
@@ -79,15 +65,14 @@ export function calcularCoincidencia(
     return { esMatch: false, score: 0 };
   }
 
-  const dosisBase = normalizarTexto(medBase.dosis).replace(/\s+/g, '');
+  const dosisBase = medBase.dosis.map(d => normalizarTexto(d).replace(/\s+/g, '')).join(' ');
 
   const parseoCompleto = producto.principiosActivos.length > 0 && producto.dosis.length > 0;
 
   if (parseoCompleto) {
     const principioOK = principiosCoinciden(producto.principiosActivos, medBase.principioActivo);
-    const dosisOK = dosisCoinciden(producto.dosis, medBase.dosis);
 
-    if (principioOK && dosisOK) {
+    if (principioOK) {
       return {
         esMatch: true,
         score: Math.max(puntajeNombre(producto.nombreOriginal, medBase), 0.5)
@@ -98,7 +83,7 @@ export function calcularCoincidencia(
 
   const nombreLimpio = normalizarTexto(producto.nombreOriginal);
   const tieneDosis = nombreLimpio.includes(dosisBase);
-  const puntaje = diceCoefficient(nombreLimpio, normalizarTexto(`${medBase.principioActivo} ${medBase.dosis}`));
+  const puntaje = diceCoefficient(nombreLimpio, normalizarTexto(`${medBase.principioActivo} ${medBase.dosis.join(' ')}`));
 
   if (puntaje >= 0.7 || (puntaje >= 0.5 && tieneDosis)) {
     return { esMatch: true, score: parseFloat(puntaje.toFixed(2)) };

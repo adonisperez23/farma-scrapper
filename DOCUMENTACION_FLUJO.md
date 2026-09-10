@@ -10,7 +10,7 @@ Este proyecto extrae precios de medicamentos desde 4 farmacias venezolanas en l�
 - Farmapaz (scraping HTML)
 - Farmatina (scraping HTML)
 
-**Salida:** Tabla por medicamento base con todas las ofertas encontradas, ordenadas primero por productos de principio activo único (no combo) y luego por precio unitario (Bs/und) ascendente; productos con componentes mixtos (combos o múltiples principios activos) aparecen al final de cada grupo. **Medicamentos base:** 52 entradas (Hipertensión: 25, Diabetes Tipo 2: 16, Combinaciones: 11).
+**Salida:** Tabla por medicamento base con todas las ofertas encontradas, ordenadas primero por productos de principio activo único (no combo) y luego por precio unitario (Bs/und) ascendente; productos con componentes mixtos (combos o múltiples principios activos) aparecen al final de cada grupo. **Medicamentos base:** 43 entradas (Hipertensión: 29, Diabetes Tipo 2: 14).
 
 **Persistencia:** Al final de cada ejecución, los datos se suben a Supabase:
 - `medicamentos_base`: catálogo maestro (upsert por `id`)
@@ -80,7 +80,7 @@ for (const medBase of medicamentosBase) { ... }
 ```
 
 - Itera `medicamentosBase` (definidos en `src/data/medicamentos.ts:3`)
-- Cada entrada: `id`, `patologia`, `principioActivo`, `dosis`, `alias[]`, `presentacionReferencia` (unidades, ej. 10 para tabletas, 1 para insulinas)
+- Cada entrada: `id`, `patologia`, `principioActivo`, `dosis: string[]`, `alias[]`, `presentacionReferencia` (unidades, ej. 10 para tabletas, 1 para insulinas)
 - Para cada medicamento base, lanza scraping en paralelo a las 4 farmacias
 
 ---
@@ -173,8 +173,7 @@ calcularCoincidencia(producto: ProductoNormalizado, medBase: MedicamentoBase): R
 1. **Descarta combos** → `{esMatch: false, score: 0}` (línea 78-80)
 2. **Si parseo completo** (`principiosActivos.length > 0 && dosis.length > 0`):
    - `principiosCoinciden()` - normaliza ambos, compara tokens clave (prefijo 6 chars), Dice coefficient ≥ 0.6
-   - `dosisCoinciden()` - extrae número (ej. "50mg" → 50), compara exacto vs `medBase.dosis`
-   - Si ambos OK → match con `score = max(Dice(nombre, objetivo), 0.5)`
+   - Match con `score = max(Dice(nombre, objetivo), 0.5)`
 3. **Fallback (parseo incompleto):**
    - Dice coefficient sobre nombre limpio vs `"principioActivo dosis"`
    - Match si `score ≥ 0.7` OR (`score ≥ 0.5` Y nombre incluye dosis base)
@@ -279,8 +278,9 @@ await upsertPreciosFarmacia(registrosParaGuardar);
 - **Comportamiento:**
   - Si no existe → `INSERT` (nuevo producto detectado)
   - Si existe → `UPDATE` (precio, disponibilidad, fecha_actualizacion, score_similitud)
-- ~200 registros por ejecución diaria (52 medicamentos × ~4 farmacias)
+- ~200 registros por ejecución diaria (43 medicamentos × ~4 farmacias)
 - Campos clave persistidos: `precio_bs`, `precio_unitario`, `precio_normalizado`, `disponibilidad`, `tasa_bcv_usd`, `fecha_actualizacion`, `tiene_componentes_mixtos`
+- **Campo `dosis`**: se almacena como string único usando `r.dosis.join(" / ")`. Ejemplo: `["5mg","10mg"]` → `"5mg / 10mg"`. Para combos con múltiples principios activos, las dosis se unen con ` / `.
 
 #### 9.3 Cliente Supabase (`src/lib/supabase.ts`)
 ```typescript
@@ -300,7 +300,7 @@ interface MedicamentoBase {
   id: string;
   patologia: 'Hipertensión' | 'Diabetes Tipo 2' | 'General';
   principioActivo: string;
-  dosis: string;
+  dosis: string[];
   alias?: string[];
   presentacionReferencia: number;  // ej. 10 (tabletas), 1 (insulinas)
 }
@@ -333,14 +333,13 @@ interface RegistroPreparadoDB {
   farmacia: NombreFarmacia;
   nombre_producto_farmacia: string;
   principio_activo: string;
-  dosis: string;
+  dosis: string[];
   laboratorio: string;
   es_combo: boolean;
   presentacion: string;
   cantidad_unidades: number;
   forma_farmaceutica: string;
-  clave_comparacion: string;
-  precio_original: number;
+    precio_original: number;
   moneda: Moneda;
   precio: number;              // Bs finales
   precio_unitario: number;     // Bs/und
@@ -349,8 +348,7 @@ interface RegistroPreparadoDB {
   url_producto: string;
   score_similitud: number;
   tasa_bcv_usd: number | null;
-  fuente_tasa: string | null;
-  fecha_actualizacion: string;
+    fecha_actualizacion: string;
   tiene_componentes_mixtos: boolean;  // true si esCombo || principiosActivos.length > 1
 }
 ```
@@ -369,7 +367,7 @@ interface RegistroPreparadoDB {
 | `farmatina.ts:6` | BASE_URL | `https://farmatina.com` |
 | `dolar.ts:14` | URL_OFICIAL | `https://ve.dolarapi.com/v1/dolares/oficial` |
 | `normalizar.ts:71-100` | LABORATORIOS_CONOCIDOS | 99 entries |
-| `medicamentos.ts:3` | medicamentosBase | 52 medicamentos (ver lista completa abajo) |
+| `medicamentos.ts:3` | medicamentosBase | 43 medicamentos (ver lista completa abajo) |
 | `.env` | SUPABASE_URL | `https://xxx.supabase.co` |
 | `.env` | SUPABASE_SERVICE_ROLE_KEY | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` |
 | `scheduler.ts:4` | CRON_SCHEDULE | `0 10 * * *` (6:00 AM VET = UTC-4) |
@@ -389,64 +387,52 @@ SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 **Lista completa de medicamentos base (`src/data/medicamentos.ts`):**
 
-*Hipertensión (25):*
-- MED-001: Amlodipina / Amlodipino 5mg (ref: 10)
-- MED-002: Atenolol 50mg (ref: 10)
-- MED-003: Bisoprolol 5mg (ref: 10)
-- MED-004: Candesartán 16mg (ref: 10)
-- MED-005: Captopril 25mg (ref: 10)
-- MED-006: Carvedilol 12.5mg (ref: 10)
-- MED-007: Clonidina 0.15mg (ref: 10)
-- MED-008: Clortalidona 25mg (ref: 10)
-- MED-009: Diltiazem 60mg (ref: 10)
-- MED-010: Enalapril 20mg (ref: 10)
-- MED-011: Espironolactona 25mg (ref: 10)
-- MED-012: Furosemida 40mg (ref: 10)
-- MED-013: Hidroclorotiazida 25mg (ref: 10)
-- MED-014: Indapamida 1.5mg (ref: 10)
-- MED-015: Lisinopril 10mg (ref: 10)
-- MED-016: Losartán Potásico 50mg (ref: 10)
-- MED-017: Metildopa 250mg (ref: 10)
-- MED-018: Metoprolol 50mg (ref: 10)
-- MED-019: Nebivolol 5mg (ref: 10)
-- MED-020: Nifedipina 30mg (ref: 10)
-- MED-021: Olmesartán 20mg (ref: 10)
-- MED-022: Ramipril 5mg (ref: 10)
-- MED-023: Telmisartán 40mg (ref: 10)
-- MED-024: Valsartán 80mg (ref: 10)
-- MED-025: Verapamilo 80mg (ref: 10)
+*Hipertensión (29):*
+- MED-001: Amlodipina (ref: 10) — dosis: ["2.5mg", "5mg", "10mg"]
+- MED-002: Atenolol (ref: 10) — dosis: ["25mg", "50mg", "100mg"]
+- MED-003: Bisoprolol (ref: 10) — dosis: ["1.25mg", "2.5mg", "5mg", "10mg"]
+- MED-004: Candesartán (ref: 10) — dosis: ["8mg", "16mg", "32mg"]
+- MED-005: Captopril (ref: 10) — dosis: ["12.5mg", "25mg", "50mg"]
+- MED-006: Carvedilol (ref: 10) — dosis: ["3.125mg", "6.25mg", "12.5mg", "25mg"]
+- MED-007: Clonidina (ref: 10) — dosis: ["0.10mg", "0.15mg", "0.20mg", "0.30mg"]
+- MED-008: Diltiazem (ref: 10) — dosis: ["60mg", "90mg", "120mg", "180mg", "240mg"]
+- MED-009: Enalapril (ref: 10) — dosis: ["2.5mg", "5mg", "10mg", "20mg"]
+- MED-010: Espironolactona (ref: 10) — dosis: ["25mg", "50mg", "100mg"]
+- MED-011: Furosemida (ref: 10) — dosis: ["20mg", "40mg", "80mg"]
+- MED-012: Hidroclorotiazida (ref: 10) — dosis: ["12.5mg", "25mg", "50mg"]
+- MED-013: Indapamida (ref: 10) — dosis: ["1.5mg", "2.5mg"]
+- MED-014: Lisinopril (ref: 10) — dosis: ["2.5mg", "5mg", "10mg", "20mg", "40mg"]
+- MED-015: Losartán Potásico (ref: 10) — dosis: ["12.5mg", "25mg", "50mg", "100mg"]
+- MED-016: Metildopa (ref: 10) — dosis: ["250mg", "500mg"]
+- MED-017: Metoprolol (ref: 10) — dosis: ["25mg", "50mg", "100mg", "200mg"]
+- MED-018: Nebivolol (ref: 10) — dosis: ["2.5mg", "5mg", "10mg"]
+- MED-019: Nifedipina (ref: 10) — dosis: ["10mg", "20mg", "30mg", "60mg"]
+- MED-020: Olmesartán (ref: 10) — dosis: ["10mg", "20mg", "40mg"]
+- MED-021: Ramipril (ref: 10) — dosis: ["1.25mg", "2.5mg", "5mg", "10mg"]
+- MED-022: Telmisartán (ref: 10) — dosis: ["20mg", "40mg", "80mg"]
+- MED-023: Valsartán (ref: 10) — dosis: ["40mg", "80mg", "160mg", "320mg"]
+- MED-024: Verapamilo (ref: 10) — dosis: ["40mg", "80mg", "120mg", "180mg", "240mg"]
+- MED-037: Amlodipina + Losartán (ref: 10) — dosis: ["2.5mg/50mg", "5mg/50mg", "5mg/100mg", "10mg/100mg"]
+- MED-038: Amlodipina + Valsartán (ref: 10) — dosis: ["5mg/80mg", "5mg/160mg", "10mg/160mg", "10mg/320mg"]
+- MED-039: Losartán + Hidroclorotiazida (ref: 10) — dosis: ["50mg/12.5mg", "100mg/12.5mg", "100mg/25mg"]
+- MED-040: Olmesartán + Amlodipina (ref: 10) — dosis: ["20mg/5mg", "40mg/5mg", "40mg/10mg"]
+- MED-041: Valsartán + Hidroclorotiazida (ref: 10) — dosis: ["80mg/12.5mg", "160mg/12.5mg", "160mg/25mg", "320mg/12.5mg", "320mg/25mg"]
 
-*Diabetes Tipo 2 (16):*
-- MED-026: Acarbosa 50mg (ref: 10)
-- MED-027: Canagliflozina 100mg (ref: 10)
-- MED-028: Dapagliflozina 10mg (ref: 10)
-- MED-029: Empagliflozina 10mg (ref: 10)
-- MED-030: Glibenclamida 5mg (ref: 10)
-- MED-031: Gliclazida 60mg (ref: 10)
-- MED-032: Glimepirida 2mg (ref: 10)
-- MED-033: Glipizida 5mg (ref: 10)
-- MED-034: Insulina Glargina 100 UI/ml (ref: 1)
-- MED-035: Insulina NPH 100 UI/ml (ref: 1)
-- MED-036: Insulina Regular / Cristalina 100 UI/ml (ref: 1)
-- MED-037: Linagliptina 5mg (ref: 10)
-- MED-038: Metformina 850mg (ref: 10)
-- MED-039: Pioglitazona 15mg (ref: 10)
-- MED-040: Sitagliptina 50mg (ref: 10)
-- MED-041: Vildagliptina 50mg (ref: 10)
-
-*Combinaciones / Mezclas (11):*
-- MED-042: Amlodipina + Losartán 5mg/50mg (ref: 10)
-- MED-043: Amlodipina + Valsartán 5mg/160mg (ref: 10)
-- MED-044: Losartán + Hidroclorotiazida 50mg/12.5mg (ref: 10)
-- MED-045: Olmesartán + Amlodipina 20mg/5mg (ref: 10)
-- MED-046: Valsartán + Hidroclorotiazida 160mg/12.5mg (ref: 10)
-- MED-047: Empagliflozina + Linagliptina 10mg/5mg (ref: 10)
-- MED-048: Empagliflozina + Metformina 5mg/850mg (ref: 10)
-- MED-049: Linagliptina + Metformina 2.5mg/850mg (ref: 10)
-- MED-050: Metformina + Glibenclamida 500mg/2.5mg (ref: 10)
-- MED-051: Sitagliptina + Metformina 50mg/850mg (ref: 10)
-- MED-052: Vildagliptina + Metformina 50mg/850mg (ref: 10)
-
+*Diabetes Tipo 2 (14):*
+- MED-025: Dapagliflozina (ref: 10) — dosis: ["5mg", "10mg"]
+- MED-026: Empagliflozina (ref: 10) — dosis: ["10mg", "25mg"]
+- MED-027: Glibenclamida (ref: 10) — dosis: ["1.25mg", "2.5mg", "5mg"]
+- MED-028: Gliclazida (ref: 10) — dosis: ["30mg", "60mg", "80mg"]
+- MED-029: Glimepirida (ref: 10) — dosis: ["1mg", "2mg", "3mg", "4mg", "6mg"]
+- MED-030: Insulina NPH (ref: 1) — dosis: ["100 UI/ml"]
+- MED-031: Insulina Regular / Cristalina (ref: 1) — dosis: ["100 UI/ml"]
+- MED-032: Linagliptina (ref: 10) — dosis: ["5mg"]
+- MED-033: Metformina (ref: 10) — dosis: ["500mg", "850mg", "1000mg"]
+- MED-034: Pioglitazona (ref: 10) — dosis: ["15mg", "30mg", "45mg"]
+- MED-035: Sitagliptina (ref: 10) — dosis: ["25mg", "50mg", "100mg"]
+- MED-036: Vildagliptina (ref: 10) — dosis: ["50mg"]
+- MED-042: Empagliflozina + Linagliptina (ref: 10) — dosis: ["10mg/5mg", "25mg/5mg"]
+- MED-043: Metformina + Glibenclamida (ref: 10) — dosis: ["250mg/1.25mg", "500mg/2.5mg", "500mg/5mg"]
 ---
 
 ## 6. Comandos de Ejecución
@@ -575,13 +561,15 @@ Farmatina   calox        x10 tableta        86.36       8.64             86.36  
 
 ### 🔧 Cómo Agregar Nuevo Medicamento Base
 
+> **Nota:** El campo `dosis` es `string[]` (array de strings). Cada medicamento puede tener múltiples dosis disponibles.
+
 Editar `src/data/medicamentos.ts`:
 ```typescript
 {
   id: 'MED-053',
   patologia: 'Hipertensión',
   principioActivo: 'Enalapril',
-  dosis: '20mg',
+  dosis: ['5mg', '10mg', '20mg', '40mg'],
   alias: ['enalapril', 'enalapril maleato 20 mg'],
   presentacionReferencia: 10
 }
@@ -617,7 +605,7 @@ flowchart TD
     O --> F
     F --> P[construirComparacion\nagrupa + ordena:\n1. tieneComponentesMixtos (false primero)\n2. precio_unitario ASC]
     P --> Q[imprimirComparacion\ntabla formateada]
-    Q --> R1[sincronizarMedicamentosBase\nupsert 52 medicamentos]
+    Q --> R1[sincronizarMedicamentosBase\nupsert 43 medicamentos]
     R1 --> R2[upsertPreciosFarmacia\nupsert ~200 precios]
     R2 --> R[Fin + return registrosParaGuardar]
 ```
@@ -653,7 +641,7 @@ CREATE TABLE medicamentos_base (
   id TEXT PRIMARY KEY,                    -- 'MED-001'
   patologia TEXT NOT NULL,                -- 'Hipertensión' | 'Diabetes Tipo 2' | 'General'
   principio_activo TEXT NOT NULL,         -- 'Amlodipina / Amlodipino'
-  dosis TEXT NOT NULL,                    -- '5mg'
+  dosis TEXT[] NOT NULL,                  -- {"5mg","10mg"}
   alias TEXT[],                           -- ['Amlovas', 'Astudal']
   presentacion_referencia INT NOT NULL,   -- 10 (tabletas), 1 (insulinas)
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -671,14 +659,13 @@ CREATE TABLE precios_farmacia (
   farmacia TEXT NOT NULL,                 -- 'Farmatodo' | 'Farmadón' | 'Farmapaz' | 'Farmatina'
   nombre_producto_farmacia TEXT NOT NULL, -- Nombre exacto en la web
   principio_activo TEXT NOT NULL,
-  dosis TEXT NOT NULL,
+  dosis TEXT NOT NULL,                   -- string unido con " / " ej. "5mg / 10mg"
   laboratorio TEXT,
   es_combo BOOLEAN DEFAULT FALSE,
   presentacion TEXT,                      -- 'x10 tableta'
   cantidad_unidades INT,
   forma_farmaceutica TEXT,                -- 'tableta', 'capsula', 'jarabe'
-  clave_comparacion TEXT NOT NULL,        -- 'MED-001-5mg'
-  precio_original NUMERIC(12,2),          -- Precio tal cual en la web
+    precio_original NUMERIC(12,2),          -- Precio tal cual en la web
   moneda TEXT NOT NULL,                   -- 'Bs' | 'REF'
   precio_bs NUMERIC(12,2) NOT NULL,       -- Precio final en Bolívares
   precio_unitario NUMERIC(12,4),          -- Bs/unidad
@@ -687,8 +674,7 @@ CREATE TABLE precios_farmacia (
   url_producto TEXT,
   score_similitud NUMERIC(3,2),           -- 0.00 - 1.00
   tasa_bcv_usd NUMERIC(10,4),             -- Tasa usada si moneda=REF
-  fuente_tasa TEXT,                       -- 've.dolarapi.com'
-  fecha_actualizacion TIMESTAMPTZ NOT NULL,
+    fecha_actualizacion TIMESTAMPTZ NOT NULL,
   tiene_componentes_mixtos BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -810,4 +796,4 @@ ORDER BY p.fecha_actualizacion DESC;
 
 ---
 
-*Documentación generada basada en código fuente revisado agosto 2026 (actualizada: 52 medicamentos base, presentacionReferencia 10/1, test usa amlodipina, node-cron agregado, **Supabase upsert + scheduler diario**)*
+*Documentación generada basada en código fuente revisado agosto 2026 (actualizada: 43 medicamentos base, dosis como string[] (unido con " / " para BD), test usa amlodipina, node-cron agregado, **Supabase upsert + scheduler diario**)*

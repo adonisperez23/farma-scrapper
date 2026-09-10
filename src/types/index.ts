@@ -2,7 +2,7 @@ export interface MedicamentoBase {
   id: string;
   patologia: 'Hipertensión' | 'Diabetes Tipo 2' | 'General';
   principioActivo: string;
-  dosis: string;
+  dosis: string[];
   alias?: string[];
   presentacionReferencia: number;
 }
@@ -42,13 +42,12 @@ export interface RegistroPreparadoDB {
   farmacia: NombreFarmacia;
   nombre_producto_farmacia: string;
   principio_activo: string;
-  dosis: string;
+  dosis: string[];
   laboratorio: string;
   es_combo: boolean;
   presentacion: string;
   cantidad_unidades: number;
   forma_farmaceutica: string;
-  clave_comparacion: string;
   precio_original: number;
   moneda: Moneda;
   precio: number;
@@ -58,7 +57,6 @@ export interface RegistroPreparadoDB {
   url_producto: string;
   score_similitud: number;
   tasa_bcv_usd: number | null;
-  fuente_tasa: string | null;
   fecha_actualizacion: string;
   tiene_componentes_mixtos: boolean;
 }

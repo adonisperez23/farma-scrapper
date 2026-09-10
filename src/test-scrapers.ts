@@ -89,8 +89,7 @@ async function testScrapers(): Promise<void> {
         presentacion,
         cantidad_unidades: n.cantidadUnidades,
         forma_farmaceutica: n.formaFarmaceutica,
-        clave_comparacion: `${base.id}-${String(base.dosis)}`,
-        precio_original: n.precio,
+                precio_original: n.precio,
         moneda: n.moneda,
         precio: Math.round(precioBs * 100) / 100,
         precio_unitario: precioPorUnidad,
@@ -99,8 +98,7 @@ async function testScrapers(): Promise<void> {
         url_producto: n.urlProducto,
         score_similitud: r.score,
         tasa_bcv_usd: n.moneda === 'REF' ? tasaUsd : null,
-        fuente_tasa: n.moneda === 'REF' ? (tasaDolar?.fuente ?? null) : null,
-        fecha_actualizacion: new Date().toISOString(),
+                fecha_actualizacion: new Date().toISOString(),
         tiene_componentes_mixtos: tieneComponentesMixtos
       });
     }
